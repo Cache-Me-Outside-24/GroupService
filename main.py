@@ -6,6 +6,7 @@ from resources import create_group, get_group_from_id
 app=FastAPI()
 
 app.include_router(create_group.router)
+app.include_router(get_group_from_id.router)
 
 @app.get("/")
 def get_root():
