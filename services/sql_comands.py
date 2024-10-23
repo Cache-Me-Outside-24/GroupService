@@ -48,6 +48,9 @@ class SQLMachine():
         connection = self.create_connection()
         with connection.cursor() as cursor:
             cursor.execute(query, tuple(data.values()))
+            id = cursor.lastrowid
         
         connection.close()
+
+        return id
         

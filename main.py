@@ -1,13 +1,11 @@
 from typing import Union
 from fastapi import FastAPI, Depends, HTTPException
-from starlette.config import Config
-from starlette.requests import Request
-from starlette.middleware.sessions import SessionMiddleware
 from dotenv import load_dotenv
-from starlette.requests import Request
-from starlette.responses import JSONResponse, HTMLResponse
+from resources import create_group, get_group_from_id
 
 app=FastAPI()
+
+app.include_router(create_group.router)
 
 @app.get("/")
 def get_root():
