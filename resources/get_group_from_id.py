@@ -23,12 +23,6 @@ class GetGroupResponse(BaseModel):
     links: List[Link]  # HATEOAS links
 
 
-# response model for a paginated list of groups
-class PaginatedGroupsResponse(BaseModel):
-    data: List[GetGroupResponse]
-    links: List[Link]  # Pagination links
-
-
 @router.get(
     "/groups/{group_id}",
     response_model=GetGroupResponse,
