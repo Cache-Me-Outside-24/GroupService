@@ -1,8 +1,9 @@
-from typing import Union
-from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
 import logging
 import time
+import uvicorn
+
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from resources import create_group, get_group_from_id, get_all_groups
 
@@ -53,3 +54,9 @@ def get_root():
         "description": "Manages group creation and detail retrieval",
     }
     return microservice_info
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run(app, host="0.0.0.0", port=8000)
