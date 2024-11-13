@@ -5,7 +5,6 @@ import os
 # Use our .env file to set up the environment variables.
 load_dotenv()
 
-
 class SQLMachine:
     def create_connection(self):
         """
@@ -30,16 +29,18 @@ class SQLMachine:
         """
 
         if data is not None:
-            conditions = [f"{x} = {data[x]}" for x in data]
+            conditions = [f"{x} = %s" for x in data]
             conditions = " AND ".join(conditions)
             query = f"SELECT * FROM {schema}.{table} WHERE {conditions}"
+            values = tuple(data.values())
         else:
             # construct our query.
             query = f"SELECT * FROM {schema}.{table}"
+            values = ()
 
         connection = self.create_connection()
         with connection.cursor() as cursor:
-            cursor.execute(query)
+            cursor.execute(query, values)
             result = cursor.fetchall()
 
         connection.close()
@@ -74,6 +75,7 @@ class SQLMachine:
         query = f"INSERT INTO {schema}.{table} ({columns}) VALUES ({placeholders})"
 
         connection = self.create_connection()
+
         with connection.cursor() as cursor:
             cursor.execute(query, tuple(data.values()))
             id = cursor.lastrowid
@@ -82,4 +84,25 @@ class SQLMachine:
 
         return id
     
+    def delete(self, schema, table, data=None):
+        """
+        Delete all rows from the table which meet the conditions.
+        """
 
+        if data is not None:
+            conditions = [f"{x} = {data[x]}" for x in data]
+            conditions = " AND ".join(conditions)
+            query = f"DELETE FROM {schema}.{table} WHERE {conditions}"
+        else:
+            # construct our query.
+            query = f"DELETE FROM {schema}.{table}"
+
+        connection = self.create_connection()
+
+        with connection.cursor() as cursor:
+            cursor.execute(query)
+            result = cursor.rowcount
+
+        connection.close()
+
+        return result

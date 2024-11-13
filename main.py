@@ -5,18 +5,18 @@ import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
-from resources import create_group, get_group_from_id, get_all_groups
+from resources import create_group, get_group_from_id, get_all_groups, delete_group
 
 app = FastAPI()
 
 app.include_router(create_group.router)
 app.include_router(get_group_from_id.router)
 app.include_router(get_all_groups.router)
+app.include_router(delete_group.router)
 
 # set up middleware logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
 
 # middleware to log requests before and after
 @app.middleware("http")
@@ -35,7 +35,6 @@ async def log_requests(request: Request, call_next):
 
     return response
 
-
 # CORS configuration
 app.add_middleware(
     CORSMiddleware,
@@ -45,7 +44,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 @app.get("/")
 def get_root():
     # GroupService info
@@ -54,7 +52,6 @@ def get_root():
         "description": "Manages group creation and detail retrieval",
     }
     return microservice_info
-
 
 if __name__ == "__main__":
     import uvicorn

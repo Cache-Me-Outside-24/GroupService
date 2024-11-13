@@ -9,8 +9,8 @@ router = APIRouter()
 # Define a Pydantic model for the request body
 class CreateGroupRequest(BaseModel):
     name: str  # name of the group
-    members: List[str]  # list of group members (just emails for now)
-
+    group_photo: str # link to a picture for the group
+    members: List[str]  # list of group members (emails)
 
 ### HATEOAS ###
 
@@ -23,7 +23,7 @@ class Link(BaseModel):
 
 # Model for a single group with HATEOAS links
 class CreateGroupResponse(BaseModel):
-    group_id: str
+    group_id: int
     name: str
     links: List[Link]  # Related links
 
@@ -58,7 +58,6 @@ class PaginatedGroupsResponse(BaseModel):
     },
 )
 def create_new_group(group: CreateGroupRequest, response: Response):
-    print(group)
     try:
         sql = SQLMachine()
 
@@ -69,14 +68,16 @@ def create_new_group(group: CreateGroupRequest, response: Response):
                 detail="Group creation accepted, processing asynchronously",
             )
 
-        # convert list of members to a comma-separated string for inserting into db
-        members_str = ",".join(group.members)
-
-        group_data = group.dict()
-        group_data["members"] = members_str
+        group_data = group.model_dump()
 
         # insert group into db
-        id = sql.insert("group_service_db", "group", group_data)
+        id = sql.insert("group_service_db", "groups", {"group_name": group_data["name"], "group_photo": group_data["group_photo"]})
+
+        # insert members into db
+        for member in group_data["members"]:
+            uid = get_uid_from_email(member)
+            sql.insert("group_service_db", "group_members", {"user_id": uid, "group_id": id})
+
 
         # HATEOAS links
         links = [
@@ -89,6 +90,20 @@ def create_new_group(group: CreateGroupRequest, response: Response):
         return CreateGroupResponse(group_id=id, name=group.name, links=links)
 
     except Exception as e:
+        print(repr(e))
         raise HTTPException(
             status_code=400, detail="An error occurred while creating the group"
         )
+
+def get_uid_from_email(email: str):
+    """
+        Temporary fix to get group creation to work properly.
+        TODO: REPLACE WITH CALL TO USER MICROSERVICE
+    """
+    sql = SQLMachine()
+
+    result = sql.select("user_service_db", "users", {"email": email})
+    if not result:
+        raise Exception("No user with this email found.")
+
+    return result[0][0]
