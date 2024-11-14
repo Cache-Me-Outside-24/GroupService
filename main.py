@@ -5,7 +5,7 @@ import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
-from resources import create_group, get_group_from_id, get_all_groups, delete_group
+from resources import create_group, get_group_from_id, get_all_groups, delete_group, get_group_members
 
 app = FastAPI()
 
@@ -13,6 +13,7 @@ app.include_router(create_group.router)
 app.include_router(get_group_from_id.router)
 app.include_router(get_all_groups.router)
 app.include_router(delete_group.router)
+app.include_router(get_group_members.router)
 
 # set up middleware logging
 logging.basicConfig(level=logging.INFO)

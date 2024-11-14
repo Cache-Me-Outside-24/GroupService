@@ -12,22 +12,27 @@ class Link(BaseModel):
     rel: str
     href: str
 
-# response model
-class GetGroupResponse(BaseModel):
-    group_id: int
+# pydantic model to represent a group member
+class Member(BaseModel):
+    id: str
+    email: str
     name: str
-    group_photo: str
-    members: List[str]
-    labels: List[str]
+    currency_preference: str
+    profile_pic: str
+    links: List[Link]
+
+# response model
+class GetGroupMembersResponse(BaseModel):
+    members: List[Member]
     links: List[Link]  # HATEOAS links
 
 
 @router.get(
-    "/groups/{group_id}",
-    response_model=GetGroupResponse,
+    "/groups/{group_id}/members",
+    response_model=GetGroupMembersResponse,
     status_code=200,
-    summary="Get a group by its GroupID",
-    description="Retrieve detailed information about a group by its unique ID.",
+    summary="Get information on the members of a group by its GroupID",
+    description="Retrieve detailed information about a group's members by its GroupID.",
     responses={
         202: {
             "description": "Request accepted but still processing. Check back later for results."
@@ -52,28 +57,33 @@ def get_group_from_id(
     members = []
 
     for member in members_result:
-        members.append(get_user_name_from_id(member[1]))
-
-    # TODO: get labels from other tables
-    # result["labels"] = result["labels"].split(",") if "labels" in result else []
-
+        user_info = get_user_info_from_id(member[1])
+        user_links = [
+            {"rel": "user", "href": f"/api/users/{user_info[0]}"}
+        ]
+        
+        members.append(Member(
+            id=user_info[0],
+            email=user_info[1],
+            name=user_info[2],
+            currency_preference=user_info[3],
+            profile_pic=user_info[4],
+            links=user_links
+        ))
+    
     # HATEOAS links
     links = [
-        {"rel": "self", "href": f"/api/groups/{group_id}"},
-        {"rel": "members", "href": f"/api/groups/{group_id}/members"},
+        {"rel": "self", "href": f"/api/groups/{group_id}/members"},
+        {"rel": "group", "href": f"/api/groups/{group_id}"},
         {"rel": "expenses", "href": f"/api/groups/{group_id}/expenses"},
     ]
 
-    return GetGroupResponse(
-        group_id=result[0],
-        name=result[1],
-        group_photo=result[2],
+    return GetGroupMembersResponse(
         members=members,
-        labels=[],
         links=links,
     )
 
-def get_user_name_from_id(id):
+def get_user_info_from_id(id):
     """
         TODO: Replace with call to user microservice.
     """
@@ -83,4 +93,4 @@ def get_user_name_from_id(id):
     if not result:
         raise Exception("No user with this id found.")
 
-    return result[0][2]
+    return result[0]
