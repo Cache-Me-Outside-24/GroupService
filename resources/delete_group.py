@@ -1,7 +1,5 @@
 from fastapi import APIRouter, HTTPException, Response, Query
 from services.sql_comands import SQLMachine
-from pydantic import BaseModel
-from typing import List
 
 router = APIRouter()
 
