@@ -6,8 +6,8 @@ router = APIRouter()
 @router.delete(
     "/groups/{group_id}",
     status_code=204,
-    summary="Get a group by its GroupID",
-    description="Retrieve detailed information about a group by its unique ID.",
+    summary="Delete a group by its GroupID",
+    description="Delete the group with the corresponding group ID.",
     responses={
         404: {"description": "Group not found. The specified group ID does not exist."},
         500: {"description": "Something strange happened."}
