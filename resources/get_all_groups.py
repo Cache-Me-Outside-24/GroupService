@@ -16,7 +16,7 @@ class Link(BaseModel):
 
 # response model for single group in list
 class GetGroupResponse(BaseModel):
-    group_id: str
+    group_id: int
     name: str
     group_photo: str
     members: List[str]
