@@ -103,12 +103,9 @@ async def create_new_group(
 ):
     try:
         name = request.name
-        members = request.members
+        member_emails = request.members
         group_photo = request.group_photo
         sql = SQLMachine()
-
-        # Parse members JSON string into a list
-        member_emails = eval(members)
 
         # Insert group into the database
         group_id = sql.insert(
