@@ -1,7 +1,8 @@
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, HTTPException, Response, UploadFile, Form
 from services.sql_comands import SQLMachine
 from pydantic import BaseModel
 from typing import List
+from google.cloud import storage
 
 router = APIRouter()
 
@@ -9,8 +10,9 @@ router = APIRouter()
 # Define a Pydantic model for the request body
 class CreateGroupRequest(BaseModel):
     name: str  # name of the group
-    group_photo: str # link to a picture for the group
+    group_photo: str = None  # link to a picture for the group
     members: List[str]  # list of group members (emails)
+
 
 ### HATEOAS ###
 
@@ -32,6 +34,44 @@ class CreateGroupResponse(BaseModel):
 class PaginatedGroupsResponse(BaseModel):
     data: List[CreateGroupResponse]
     links: List[Link]  # Links for pagination
+
+
+# GCP Bucket Configuration
+BUCKET_NAME = "cache-me-outside"
+
+
+def upload_to_gcp(file: UploadFile, destination_blob_name: str) -> str:
+    """
+    Uploads a file to GCP bucket and returns the public URI.
+    """
+    try:
+        storage_client = storage.Client()
+        bucket = storage_client.bucket(BUCKET_NAME)
+        blob = bucket.blob(destination_blob_name)
+
+        # Upload the file
+        blob.upload_from_file(file.file)
+
+        # Make the file publicly accessible
+        blob.make_public()
+
+        return blob.public_url
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to upload photo: {str(e)}")
+
+
+@router.post("/upload-photo")
+async def upload_photo(file: UploadFile):
+    """
+    Endpoint to upload a photo to GCP bucket and return its URI.
+    """
+    try:
+        # Generate a unique file name for the photo
+        destination_blob_name = f"temp/{file.filename}"
+        public_url = upload_to_gcp(file, destination_blob_name)
+        return {"uri": public_url}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # For OpenAPI documentation
@@ -57,37 +97,65 @@ class PaginatedGroupsResponse(BaseModel):
         400: {"description": "Bad Request - Could not create the group"},
     },
 )
-def create_new_group(group: CreateGroupRequest, response: Response):
+async def create_new_group(
+    name: str = Form(...),
+    members: str = Form(...),  # JSON string of member emails
+    group_photo: str = None,
+    response: Response = None,
+):
     try:
         sql = SQLMachine()
 
-        # TODO: process progress of request completion after accepted
-        if group.name == "deferred":  # temp condition to simulate async handling
-            raise HTTPException(
-                status_code=202,
-                detail="Group creation accepted, processing asynchronously",
+        # Parse members JSON string into a list
+        member_emails = eval(members)
+
+        # Insert group into the database
+        group_id = sql.insert(
+            "group_service_db",
+            "groups",
+            {
+                "group_name": name,
+                "group_photo": group_photo,  # Save the URI in the database
+            },
+        )
+
+        # Insert members into the database
+        for email in member_emails:
+            uid = get_uid_from_email(email)
+            sql.insert(
+                "group_service_db",
+                "group_members",
+                {"user_id": uid, "group_id": group_id},
             )
 
-        group_data = group.model_dump()
+        # Rename the photo in GCP bucket to include the group_id
+        if group_photo:
+            storage_client = storage.Client()
+            bucket = storage_client.bucket(BUCKET_NAME)
+            blob = bucket.blob(f"temp/{group_photo.split('/')[-1]}")  # Temp file name
+            new_blob_name = f"groups/{group_id}_photo.png"
+            bucket.rename_blob(blob, new_blob_name)
 
-        # insert group into db
-        id = sql.insert("group_service_db", "groups", {"group_name": group_data["name"], "group_photo": group_data["group_photo"]})
-
-        # insert members into db
-        for member in group_data["members"]:
-            uid = get_uid_from_email(member)
-            sql.insert("group_service_db", "group_members", {"user_id": uid, "group_id": id})
-
+            # Update the database with the new URI
+            updated_photo_uri = (
+                f"https://storage.googleapis.com/{BUCKET_NAME}/{new_blob_name}"
+            )
+            sql.update(
+                "group_service_db",
+                "groups",
+                {"group_photo": updated_photo_uri},
+                {"group_id": group_id},
+            )
 
         # HATEOAS links
         links = [
-            {"rel": "self", "href": f"/api/groups/{id}"},
-            {"rel": "members", "href": f"/api/groups/{id}/members"},
-            {"rel": "expenses", "href": f"/api/groups/{id}/expenses"},
+            {"rel": "self", "href": f"groups/{group_id}"},
+            {"rel": "members", "href": f"groups/{group_id}/members"},
+            {"rel": "expenses", "href": f"groups/{group_id}/expenses"},
         ]
 
-        response.headers["Link"] = f'</groups/{id}>; rel="created-resource"'
-        return CreateGroupResponse(group_id=id, name=group.name, links=links)
+        response.headers["Link"] = f'</groups/{group_id}>; rel="created-resource"'
+        return CreateGroupResponse(group_id=group_id, name=name, links=links)
 
     except Exception as e:
         print(repr(e))
@@ -95,10 +163,39 @@ def create_new_group(group: CreateGroupRequest, response: Response):
             status_code=400, detail="An error occurred while creating the group"
         )
 
+
+@router.get("/groups/{group_id}/photo")
+def get_group_photo(group_id: int):
+    try:
+        # Access your SQL database to fetch the photo path
+        sql = SQLMachine()
+        result = sql.select("group_service_db", "groups", {"group_id": group_id})
+        if not result or not result[0]["group_photo"]:
+            raise HTTPException(status_code=404, detail="Group photo not found")
+
+        photo_uri = result[0]["group_photo"]
+
+        # Extract the object name from the URI
+        object_name = photo_uri.split(f"{BUCKET_NAME}/")[-1]
+
+        # Access the bucket and fetch the object
+        storage_client = storage.Client()
+        bucket = storage_client.bucket(BUCKET_NAME)
+        blob = bucket.blob(object_name)
+
+        # Serve the file
+        return Response(content=blob.download_as_bytes(), media_type="image/png")
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to retrieve group photo: {str(e)}"
+        )
+
+
 def get_uid_from_email(email: str):
     """
-        Temporary fix to get group creation to work properly.
-        TODO: REPLACE WITH CALL TO USER MICROSERVICE
+    Temporary fix to get group creation to work properly.
+    TODO: REPLACE WITH CALL TO USER MICROSERVICE
     """
     sql = SQLMachine()
 
