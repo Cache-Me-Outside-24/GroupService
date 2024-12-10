@@ -98,12 +98,13 @@ async def upload_photo(file: UploadFile):
     },
 )
 async def create_new_group(
-    name: str = Form(...),
-    members: str = Form(...),  # JSON string of member emails
-    group_photo: str = None,
+    request: CreateGroupRequest,
     response: Response = None,
 ):
     try:
+        name = request.name
+        members = request.members
+        group_photo = request.group_photo
         sql = SQLMachine()
 
         # Parse members JSON string into a list
