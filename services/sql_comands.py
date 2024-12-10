@@ -5,6 +5,7 @@ import os
 # Use our .env file to set up the environment variables.
 load_dotenv()
 
+
 class SQLMachine:
     def create_connection(self):
         """
@@ -46,7 +47,7 @@ class SQLMachine:
         connection.close()
 
         return result
-    
+
     def select_paginated(self, schema, table, limit, offset):
         """
         Select a limited number of entries from a table in a schema within
@@ -60,12 +61,12 @@ class SQLMachine:
         with connection.cursor() as cursor:
             cursor.execute(query, (limit, offset))
             paginated_results = cursor.fetchall()
-            
+
             cursor.execute(count_query)
             total_count = cursor.fetchone()[0]
 
         connection.close()
-    
+
         return {"results": paginated_results, "total_count": total_count}
 
     def insert(self, schema, table, data):
@@ -83,7 +84,7 @@ class SQLMachine:
         connection.close()
 
         return id
-    
+
     def delete(self, schema, table, data=None):
         """
         Delete all rows from the table which meet the conditions.
@@ -106,3 +107,33 @@ class SQLMachine:
         connection.close()
 
         return result
+
+
+def update(self, schema, table, update_data, conditions):
+    """
+    Update rows in the specified table within a schema.
+
+    :param schema: The schema name.
+    :param table: The table name.
+    :param update_data: A dictionary of columns to update and their new values.
+    :param conditions: A dictionary of conditions to match for the update.
+    """
+    # Create the SET clause for update_data
+    set_clause = ", ".join([f"{key} = %s" for key in update_data.keys()])
+    # Create the WHERE clause for conditions
+    where_clause = " AND ".join([f"{key} = %s" for key in conditions.keys()])
+
+    query = f"UPDATE {schema}.{table} SET {set_clause} WHERE {where_clause}"
+
+    # Combine the values from update_data and conditions into a single tuple
+    values = tuple(update_data.values()) + tuple(conditions.values())
+
+    connection = self.create_connection()
+
+    with connection.cursor() as cursor:
+        cursor.execute(query, values)
+        rowcount = cursor.rowcount  # Number of rows affected by the update
+
+    connection.close()
+
+    return rowcount
