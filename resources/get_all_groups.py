@@ -22,12 +22,6 @@ class GetGroupResponse(BaseModel):
     links: List[Link]  # HATEOAS links
 
 
-class GroupRequest(BaseModel):
-    user_id: str
-    limit: int = 10  # Default value
-    offset: int = 0  # Default value
-
-
 # response model for a paginated list of groups
 class PaginatedGroupsResponse(BaseModel):
     data: List[GetGroupResponse]
@@ -47,12 +41,9 @@ class PaginatedGroupsResponse(BaseModel):
         400: {"description": "Bad Request - Could not fetch the groups"},
     },
 )
-def get_all_groups(request: GroupRequest):
+def get_all_groups(user_id: str, limit: int = Query(10), offset: int = Query(0)):
     try:
         sql = SQLMachine()
-        user_id = request.user_id
-        limit = request.limit
-        offset = request.offset
 
         # Step 1: Fetch all group_ids associated with the user_id
         user_groups = sql.select(
