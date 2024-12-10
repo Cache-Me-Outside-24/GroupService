@@ -108,32 +108,31 @@ class SQLMachine:
 
         return result
 
+    def update(self, schema, table, update_data, conditions):
+        """
+        Update rows in the specified table within a schema.
 
-def update(self, schema, table, update_data, conditions):
-    """
-    Update rows in the specified table within a schema.
+        :param schema: The schema name.
+        :param table: The table name.
+        :param update_data: A dictionary of columns to update and their new values.
+        :param conditions: A dictionary of conditions to match for the update.
+        """
+        # Create the SET clause for update_data
+        set_clause = ", ".join([f"{key} = %s" for key in update_data.keys()])
+        # Create the WHERE clause for conditions
+        where_clause = " AND ".join([f"{key} = %s" for key in conditions.keys()])
 
-    :param schema: The schema name.
-    :param table: The table name.
-    :param update_data: A dictionary of columns to update and their new values.
-    :param conditions: A dictionary of conditions to match for the update.
-    """
-    # Create the SET clause for update_data
-    set_clause = ", ".join([f"{key} = %s" for key in update_data.keys()])
-    # Create the WHERE clause for conditions
-    where_clause = " AND ".join([f"{key} = %s" for key in conditions.keys()])
+        query = f"UPDATE {schema}.{table} SET {set_clause} WHERE {where_clause}"
 
-    query = f"UPDATE {schema}.{table} SET {set_clause} WHERE {where_clause}"
+        # Combine the values from update_data and conditions into a single tuple
+        values = tuple(update_data.values()) + tuple(conditions.values())
 
-    # Combine the values from update_data and conditions into a single tuple
-    values = tuple(update_data.values()) + tuple(conditions.values())
+        connection = self.create_connection()
 
-    connection = self.create_connection()
+        with connection.cursor() as cursor:
+            cursor.execute(query, values)
+            rowcount = cursor.rowcount  # Number of rows affected by the update
 
-    with connection.cursor() as cursor:
-        cursor.execute(query, values)
-        rowcount = cursor.rowcount  # Number of rows affected by the update
+        connection.close()
 
-    connection.close()
-
-    return rowcount
+        return rowcount
