@@ -18,6 +18,7 @@ class Link(BaseModel):
 class GetGroupResponse(BaseModel):
     group_id: str
     name: str
+    group_photo: str
     members: List[str]
     links: List[Link]  # HATEOAS links
 
@@ -49,7 +50,9 @@ def get_all_groups(user_id: str, limit: int = Query(10), offset: int = Query(0))
         user_groups = sql.select(
             "group_service_db", "group_members", {"user_id": user_id}
         )
-        group_ids = [group["group_id"] for group in user_groups]
+        group_ids = [
+            group[0] for group in user_groups
+        ]  # Access the tuple index for group_id
 
         # Step 2: Fetch group details for each group_id
         groups = []
@@ -60,13 +63,15 @@ def get_all_groups(user_id: str, limit: int = Query(10), offset: int = Query(0))
             )
             if not group_details:
                 continue
-            group_details = group_details[0]
+            group_details = group_details[0]  # Get the first result
 
             # Step 3: Fetch all user_ids associated with this group_id
             group_members = sql.select(
                 "group_service_db", "group_members", {"group_id": group_id}
             )
-            member_user_ids = [member["user_id"] for member in group_members]
+            member_user_ids = [
+                member[1] for member in group_members
+            ]  # Access user_id from tuple
 
             # Step 4: Fetch email addresses for each user_id
             member_emails = []
@@ -75,7 +80,7 @@ def get_all_groups(user_id: str, limit: int = Query(10), offset: int = Query(0))
                     "user_service_db", "users", {"id": member_user_id}
                 )
                 if user_details:
-                    member_emails.append(user_details[0]["email"])
+                    member_emails.append(user_details[0][1])  # Access email from tuple
 
             # Create HATEOAS links
             group_links = [
@@ -86,8 +91,9 @@ def get_all_groups(user_id: str, limit: int = Query(10), offset: int = Query(0))
 
             groups.append(
                 GetGroupResponse(
-                    group_id=group_details["group_id"],
-                    name=group_details["group_name"],
+                    group_id=group_details[0],  # Access group_id
+                    name=group_details[1],  # Access group_name
+                    group_photo=group_details[2],
                     members=member_emails,
                     links=group_links,
                 )
