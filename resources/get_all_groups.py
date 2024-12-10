@@ -19,7 +19,6 @@ class GetGroupResponse(BaseModel):
     group_id: str
     name: str
     members: List[str]
-    labels: List[str]
     links: List[Link]  # HATEOAS links
 
 
@@ -42,66 +41,84 @@ class PaginatedGroupsResponse(BaseModel):
         400: {"description": "Bad Request - Could not fetch the groups"},
     },
 )
-def get_all_groups(limit: int = Query(10), offset: int = Query(0)):
+def get_all_groups(user_id: str, limit: int = Query(10), offset: int = Query(0)):
     try:
         sql = SQLMachine()
 
-        # fetch a paginated list of groups
-        result = sql.select_paginated(
-            "group_service_db", "group", limit=limit, offset=offset
+        # Step 1: Fetch all group_ids associated with the user_id
+        user_groups = sql.select(
+            "group_service_db", "group_members", {"user_id": user_id}
         )
-        paginated_results = result["results"]
-        total_count = result["total_count"]
+        group_ids = [group["group_id"] for group in user_groups]
 
-        # create HATEOAS links for each group
+        # Step 2: Fetch group details for each group_id
         groups = []
-        for result in paginated_results:
-            result["members"] = (
-                result["members"].split(",") if "members" in result else []
+        for group_id in group_ids:
+            # Fetch group details
+            group_details = sql.select(
+                "group_service_db", "groups", {"group_id": group_id}
             )
-            result["labels"] = result["labels"].split(",") if "labels" in result else []
+            if not group_details:
+                continue
+            group_details = group_details[0]
 
+            # Step 3: Fetch all user_ids associated with this group_id
+            group_members = sql.select(
+                "group_service_db", "group_members", {"group_id": group_id}
+            )
+            member_user_ids = [member["user_id"] for member in group_members]
+
+            # Step 4: Fetch email addresses for each user_id
+            member_emails = []
+            for member_user_id in member_user_ids:
+                user_details = sql.select(
+                    "user_service_db", "users", {"id": member_user_id}
+                )
+                if user_details:
+                    member_emails.append(user_details[0]["email"])
+
+            # Create HATEOAS links
             group_links = [
-                {"rel": "self", "href": f"/api/groups/{result['group_id']}"},
-                {"rel": "members", "href": f"/api/groups/{result['group_id']}/members"},
-                {
-                    "rel": "expenses",
-                    "href": f"/api/groups/{result['group_id']}/expenses",
-                },
+                {"rel": "self", "href": f"groups/{group_id}"},
+                {"rel": "members", "href": f"groups/{group_id}/members"},
+                {"rel": "expenses", "href": f"groups/{group_id}/expenses"},
             ]
 
             groups.append(
                 GetGroupResponse(
-                    group_id=result["group_id"],
-                    name=result["name"],
-                    members=result["members"],
-                    labels=result["labels"],
+                    group_id=group_details["group_id"],
+                    name=group_details["group_name"],
+                    members=member_emails,
                     links=group_links,
                 )
             )
 
-        # pagination links
+        # Step 5: Add pagination links
         pagination_links = [
-            {"rel": "current", "href": f"/api/groups?limit={limit}&offset={offset}"},
+            {"rel": "current", "href": f"groups?limit={limit}&offset={offset}"},
         ]
         if offset > 0:
             pagination_links.append(
                 {
                     "rel": "prev",
-                    "href": f"/api/groups?limit={limit}&offset={max(0, offset - limit)}",
+                    "href": f"groups?limit={limit}&offset={max(0, offset - limit)}",
                 }
             )
-        if offset + limit < total_count:
+        if offset + limit < len(groups):
             pagination_links.append(
                 {
                     "rel": "next",
-                    "href": f"/api/groups?limit={limit}&offset={offset + limit}",
+                    "href": f"groups?limit={limit}&offset={offset + limit}",
                 }
             )
 
-        return PaginatedGroupsResponse(data=groups, links=pagination_links)
+        # Apply pagination
+        paginated_groups = groups[offset : offset + limit]
+
+        return PaginatedGroupsResponse(data=paginated_groups, links=pagination_links)
 
     except Exception as e:
+        print(f"Error fetching groups: {repr(e)}")
         raise HTTPException(
-            status_code=400, detail="An error occurred while creating the group"
+            status_code=400, detail="An error occurred while fetching groups"
         )
